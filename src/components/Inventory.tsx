@@ -1,18 +1,24 @@
 import React, { useState } from 'react';
-import { InventoryItem } from '../types';
-import { Search, Plus, Edit2, Trash2 } from 'lucide-react';
+import { InventoryItem, Transaction, TransactionType } from '../types';
+import { Search, Plus, Edit2, Trash2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 interface InventoryProps {
   inventory: InventoryItem[];
   onAdd: (item: InventoryItem) => void;
   onUpdate: (item: InventoryItem) => void;
   onDelete: (id: string) => void;
+  onTransaction: (transaction: Omit<Transaction, 'id' | 'timestamp'>) => void;
 }
 
-export function Inventory({ inventory, onAdd, onUpdate, onDelete }: InventoryProps) {
+export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction }: InventoryProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  
+  // Transaction Modal State
+  const [isTxnModalOpen, setIsTxnModalOpen] = useState(false);
+  const [txnType, setTxnType] = useState<'入庫' | '出庫'>('入庫');
+  const [txnItem, setTxnItem] = useState<InventoryItem | null>(null);
 
   const filteredInventory = inventory.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -49,6 +55,38 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete }: InventoryPro
       onAdd(newItem);
     }
     handleCloseModal();
+  };
+
+  const handleOpenTxnModal = (item: InventoryItem, type: '入庫' | '出庫') => {
+    setTxnItem(item);
+    setTxnType(type);
+    setIsTxnModalOpen(true);
+  };
+
+  const handleTxnSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!txnItem) return;
+
+    const formData = new FormData(e.currentTarget);
+    const quantity = Number(formData.get('quantity'));
+    const handler = formData.get('handler') as string;
+    const documentNumber = formData.get('documentNumber') as string;
+
+    let quantityChange = Math.abs(quantity);
+    if (txnType === '出庫') {
+      quantityChange = -quantityChange;
+    }
+
+    onTransaction({
+      type: txnType,
+      itemId: txnItem.id,
+      quantityChange,
+      handler,
+      documentNumber,
+    });
+
+    setIsTxnModalOpen(false);
+    setTxnItem(null);
   };
 
   return (
@@ -113,7 +151,24 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete }: InventoryPro
                   <td className="p-4 text-right text-slate-500">{item.safetyStock}</td>
                   <td className="p-4 text-slate-600 font-mono text-sm">{item.location}</td>
                   <td className="p-4">
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1">
+                      <button 
+                        onClick={() => handleOpenTxnModal(item, '入庫')}
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium"
+                        title="入庫"
+                      >
+                        <ArrowDownToLine className="w-4 h-4" />
+                        入庫
+                      </button>
+                      <button 
+                        onClick={() => handleOpenTxnModal(item, '出庫')}
+                        className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors flex items-center gap-1 text-xs font-medium"
+                        title="出庫"
+                      >
+                        <ArrowUpFromLine className="w-4 h-4" />
+                        出庫
+                      </button>
+                      <div className="w-px h-4 bg-slate-200 mx-1"></div>
                       <button 
                         onClick={() => handleOpenModal(item)}
                         className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -204,6 +259,56 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete }: InventoryPro
                 </button>
                 <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm">
                   儲存
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {isTxnModalOpen && txnItem && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className={`p-6 border-b border-slate-100 ${txnType === '入庫' ? 'bg-emerald-50/50' : 'bg-orange-50/50'}`}>
+              <h3 className={`text-xl font-bold flex items-center gap-2 ${txnType === '入庫' ? 'text-emerald-900' : 'text-orange-900'}`}>
+                {txnType === '入庫' ? <ArrowDownToLine className="w-5 h-5" /> : <ArrowUpFromLine className="w-5 h-5" />}
+                快速{txnType}作業
+              </h3>
+              <p className="text-sm mt-1 text-slate-600">
+                品項：<span className="font-mono font-medium text-slate-900">{txnItem.id}</span> - {txnItem.name}
+              </p>
+              <p className="text-sm text-slate-600">
+                目前庫存：<span className="font-bold text-slate-900">{txnItem.quantity}</span> {txnItem.unit}
+              </p>
+            </div>
+            <form onSubmit={handleTxnSubmit} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">{txnType}數量</label>
+                <div className="relative">
+                  <input required type="number" name="quantity" min="1" max={txnType === '出庫' ? txnItem.quantity : undefined} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg font-bold" placeholder="例如: 10" />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{txnItem.unit}</span>
+                </div>
+                {txnType === '出庫' && (
+                  <p className="text-xs text-slate-500 mt-1">出庫數量不可超過目前庫存 ({txnItem.quantity})</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">經手人/單位</label>
+                  <input required name="handler" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="例如: 王小明" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">單據號碼</label>
+                  <input required name="documentNumber" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="例如: PO-12345" />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsTxnModalOpen(false)} className="px-5 py-2.5 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                  取消
+                </button>
+                <button type="submit" className={`px-5 py-2.5 rounded-xl font-medium text-white transition-colors shadow-sm ${txnType === '入庫' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}>
+                  確認{txnType}
                 </button>
               </div>
             </form>

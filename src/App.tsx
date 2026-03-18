@@ -9,10 +9,12 @@ import { Dashboard } from './components/Dashboard';
 import { Inventory } from './components/Inventory';
 import { Transactions } from './components/Transactions';
 import { LocationManagement } from './components/LocationManagement';
+import { Login } from './components/Login';
 import { initialInventory, initialTransactions } from './data/mockData';
 import { InventoryItem, Transaction } from './types';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [inventory, setInventory] = useState<InventoryItem[]>(initialInventory);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
@@ -67,9 +69,17 @@ export default function App() {
     }));
   };
 
+  if (!isAuthenticated) {
+    return <Login onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLogout={() => setIsAuthenticated(false)}
+      />
       
       <main className="flex-1 overflow-y-auto">
         {activeTab === 'dashboard' && (
@@ -81,6 +91,7 @@ export default function App() {
             onAdd={handleAddInventoryItem}
             onUpdate={handleUpdateInventoryItem}
             onDelete={handleDeleteInventoryItem}
+            onTransaction={handleAddTransaction}
           />
         )}
         {activeTab === 'transactions' && (
