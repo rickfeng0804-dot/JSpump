@@ -50,7 +50,7 @@ export default function App() {
     setTransactions(prev => [newTransaction, ...prev]);
   };
 
-  const handleAddTransaction = (txnData: Omit<Transaction, 'id' | 'timestamp'> & { newBatchId?: string }) => {
+  const handleAddTransaction = (txnData: Omit<Transaction, 'id' | 'timestamp'> & { newBatchId?: string, expirationDate?: string }) => {
     let batchDetails: TransactionBatchDetail[] = [];
     const timestamp = new Date().toISOString();
 
@@ -61,8 +61,15 @@ export default function App() {
         const isOutbound = txnData.quantityChange < 0;
 
         if (isOutbound) {
-          // FIFO: Sort by receivedDate asc
-          updatedBatches.sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime());
+          // FEFO / FIFO: Sort by expirationDate asc, then receivedDate asc
+          updatedBatches.sort((a, b) => {
+            if (a.expirationDate && b.expirationDate) {
+              return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+            }
+            if (a.expirationDate) return -1;
+            if (b.expirationDate) return 1;
+            return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+          });
           
           for (let i = 0; i < updatedBatches.length && remainingQty > 0; i++) {
             const batch = updatedBatches[i];
@@ -82,7 +89,8 @@ export default function App() {
             id: newBatchId,
             itemId: item.id,
             quantity: remainingQty,
-            receivedDate: timestamp
+            receivedDate: timestamp,
+            expirationDate: txnData.expirationDate ? new Date(txnData.expirationDate).toISOString() : undefined
           });
           batchDetails.push({ batchId: newBatchId, quantity: remainingQty });
         }

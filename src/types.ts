@@ -3,6 +3,7 @@ export interface ItemBatch {
   itemId: string;
   quantity: number;
   receivedDate: string; // 入庫日期，用於 FIFO
+  expirationDate?: string; // 有效期限，用於 FEFO 或過期標示
 }
 
 export interface InventoryItem {

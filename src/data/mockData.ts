@@ -17,8 +17,8 @@ export const initialInventory: InventoryItem[] = [
   { 
     id: 'PT-001', name: '防水墊圈 50mm', category: '零件', quantity: 500, safetyStock: 100, location: 'B-01-01', unit: '個',
     batches: [
-      { id: 'B-20231201', itemId: 'PT-001', quantity: 200, receivedDate: '2023-12-01T08:00:00Z' },
-      { id: 'B-20240316', itemId: 'PT-001', quantity: 300, receivedDate: '2024-03-16T09:30:00Z' }
+      { id: 'B-20231201', itemId: 'PT-001', quantity: 200, receivedDate: '2023-12-01T08:00:00Z', expirationDate: '2025-12-01T00:00:00Z' },
+      { id: 'B-20240316', itemId: 'PT-001', quantity: 300, receivedDate: '2024-03-16T09:30:00Z', expirationDate: '2026-03-16T00:00:00Z' }
     ]
   },
   { 
@@ -30,7 +30,7 @@ export const initialInventory: InventoryItem[] = [
   { 
     id: 'CM-001', name: '潤滑油 5L', category: '耗材', quantity: 5, safetyStock: 10, location: 'C-01-01', unit: '桶',
     batches: [
-      { id: 'B-20231115', itemId: 'CM-001', quantity: 5, receivedDate: '2023-11-15T11:00:00Z' }
+      { id: 'B-20231115', itemId: 'CM-001', quantity: 5, receivedDate: '2023-11-15T11:00:00Z', expirationDate: '2024-11-15T00:00:00Z' } // Expired
     ]
   },
 ];

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { InventoryItem } from '../types';
-import { MapPin, ScanBarcode, Box, ArrowRight, CheckCircle2, QrCode, Download, Settings, X } from 'lucide-react';
+import { MapPin, ScanBarcode, Box, ArrowRight, CheckCircle2, Settings, X } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { QRCodeCanvas } from 'qrcode.react';
 
 interface LocationManagementProps {
   inventory: InventoryItem[];
@@ -10,9 +9,7 @@ interface LocationManagementProps {
 }
 
 const ZONES = [
-  { id: 'A', name: 'A區 (成品)' },
   { id: 'B', name: 'B區 (零件)' },
-  { id: 'C', name: 'C區 (耗材)' },
 ];
 const RACKS = ['01', '02', '03', '04', '05'];
 const SHELVES = ['01', '02', '03', '04'];
@@ -24,16 +21,16 @@ interface ZoneTheme {
 }
 
 const DEFAULT_THEMES: Record<string, ZoneTheme> = {
-  'A': { primary: '#4f46e5', bg: '#e0e7ff', text: '#312e81' },
   'B': { primary: '#059669', bg: '#d1fae5', text: '#064e3b' },
-  'C': { primary: '#f59e0b', bg: '#fef3c7', text: '#78350f' },
 };
 
 export function LocationManagement({ inventory, onMoveItem }: LocationManagementProps) {
-  const [selectedZone, setSelectedZone] = useState('A');
+  const [selectedZone, setSelectedZone] = useState('B');
   const [selectedLoc, setSelectedLoc] = useState<string | null>(null);
   const [themes, setThemes] = useState<Record<string, ZoneTheme>>(DEFAULT_THEMES);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const filteredInventory = inventory.filter(i => i.category !== '成品' && i.category !== '耗材');
 
   const handleThemeChange = (zoneId: string, key: keyof ZoneTheme, value: string) => {
     setThemes(prev => ({
@@ -49,10 +46,22 @@ export function LocationManagement({ inventory, onMoveItem }: LocationManagement
   const [scanItemId, setScanItemId] = useState('');
   const [scanLocId, setScanLocId] = useState('');
   const [scanSuccess, setScanSuccess] = useState(false);
+  const [scanError, setScanError] = useState('');
 
   const handleScanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setScanError('');
     if (scanItemId && scanLocId) {
+      const item = inventory.find(i => i.id === scanItemId);
+      if (item && (item.category === '成品' || item.category === '耗材')) {
+        setScanError('成品與耗材不在此模組管理儲位');
+        return;
+      }
+      if (!item) {
+        setScanError('找不到此商品條碼');
+        return;
+      }
+
       onMoveItem(scanItemId, scanLocId);
       setScanSuccess(true);
       setTimeout(() => {
@@ -62,24 +71,6 @@ export function LocationManagement({ inventory, onMoveItem }: LocationManagement
       }, 2000);
     }
   };
-
-  const handleDownloadQR = () => {
-    if (!selectedLoc) return;
-    const canvas = document.getElementById('qr-gen') as HTMLCanvasElement;
-    if (canvas) {
-      const pngUrl = canvas
-        .toDataURL('image/png')
-        .replace('image/png', 'image/octet-stream');
-      const downloadLink = document.createElement('a');
-      downloadLink.href = pngUrl;
-      downloadLink.download = `location-${selectedLoc}.png`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-    }
-  };
-
-  const selectedLocItems = selectedLoc ? inventory.filter(i => i.location === selectedLoc) : [];
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
@@ -147,11 +138,17 @@ export function LocationManagement({ inventory, onMoveItem }: LocationManagement
             )}
           </button>
         </form>
+        {scanError && (
+          <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100 flex items-center gap-2">
+            <X className="w-4 h-4" />
+            {scanError}
+          </div>
+        )}
       </div>
 
       {/* Visual Map Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+      <div className="grid grid-cols-1 gap-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center overflow-x-auto">
             <div className="flex gap-2">
               {ZONES.map(zone => {
@@ -192,7 +189,7 @@ export function LocationManagement({ inventory, onMoveItem }: LocationManagement
                   <div className="flex flex-col gap-2">
                     {SHELVES.map(shelf => {
                       const locId = `${selectedZone}-${rack}-${shelf}`;
-                      const itemsHere = inventory.filter(i => i.location === locId);
+                      const itemsHere = filteredInventory.filter(i => i.location === locId);
                       const isOccupied = itemsHere.length > 0;
                       const isSelected = selectedLoc === locId;
                       const theme = themes[selectedZone];
@@ -241,80 +238,6 @@ export function LocationManagement({ inventory, onMoveItem }: LocationManagement
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* Location Details Sidebar */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col h-[600px]">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <MapPin 
-                  style={selectedLoc ? { color: themes[selectedLoc.split('-')[0]].primary } : {}} 
-                  className={cn("w-5 h-5", !selectedLoc && "text-indigo-500")} 
-                />
-                儲位詳細資訊
-              </h3>
-              <p className="text-sm text-slate-500 mt-1">
-                {selectedLoc ? `目前選擇: ${selectedLoc}` : '請點擊左側地圖選擇儲位'}
-              </p>
-            </div>
-            
-            {selectedLoc && (
-              <div className="flex flex-col items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-                <QRCodeCanvas
-                  id="qr-gen"
-                  value={selectedLoc}
-                  size={80}
-                  level={"H"}
-                  includeMargin={true}
-                  className="rounded-lg"
-                />
-                <button
-                  onClick={handleDownloadQR}
-                  className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium transition-colors px-2 py-1 rounded hover:bg-indigo-50"
-                  title="下載 QR Code"
-                >
-                  <Download className="w-3 h-3" />
-                  下載標籤
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="p-0 flex-1 overflow-y-auto">
-            {!selectedLoc ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center">
-                <MapPin className="w-12 h-12 mb-4 opacity-20" />
-                <p>點擊地圖上的儲位<br/>以查看存放的商品</p>
-              </div>
-            ) : selectedLocItems.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center">
-                <Box className="w-12 h-12 mb-4 opacity-20" />
-                <p>此儲位目前為空</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {selectedLocItems.map(item => (
-                  <div key={item.id} className="p-4 hover:bg-slate-50 transition-colors">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-mono text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                        {item.id}
-                      </span>
-                      <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                        {item.category}
-                      </span>
-                    </div>
-                    <h4 className="font-medium text-slate-900 mt-2">{item.name}</h4>
-                    <div className="flex justify-between items-end mt-3">
-                      <span className="text-sm text-slate-500">數量</span>
-                      <span className="font-bold text-lg text-slate-900">
-                        {item.quantity} <span className="text-sm font-normal text-slate-500">{item.unit}</span>
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>

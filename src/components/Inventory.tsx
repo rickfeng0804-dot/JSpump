@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { InventoryItem, Transaction, TransactionType } from '../types';
-import { Search, Plus, Edit2, Trash2, ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, Layers } from 'lucide-react';
-import { format } from 'date-fns';
+import { Search, Plus, Edit2, Trash2, ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, Layers, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { format, isBefore } from 'date-fns';
 
 interface InventoryProps {
   inventory: InventoryItem[];
@@ -22,6 +22,31 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
   const [txnItem, setTxnItem] = useState<InventoryItem | null>(null);
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  const handleRemoveExpired = () => {
+    if (!window.confirm('確定要清除所有已過期的庫存批號嗎？這將會自動產生對應的出庫紀錄。')) return;
+
+    inventory.forEach(item => {
+      if (!item.batches) return;
+      
+      const expiredBatches = item.batches.filter(b => b.expirationDate && isBefore(new Date(b.expirationDate), new Date()));
+      if (expiredBatches.length === 0) return;
+
+      const totalExpiredQty = expiredBatches.reduce((sum, b) => sum + b.quantity, 0);
+      if (totalExpiredQty === 0) return;
+
+      // Create a transaction to remove expired stock
+      // Note: In a real app, we might want a specific '報廢' (Scrap) transaction type, 
+      // but we'll use '出庫' with a specific document number for now.
+      onTransaction({
+        type: '出庫',
+        itemId: item.id,
+        quantityChange: -totalExpiredQty,
+        handler: '系統-自動清除',
+        documentNumber: `EXP-${format(new Date(), 'yyyyMMddHHmm')}`
+      } as any);
+    });
+  };
 
   const filteredInventory = inventory.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -81,6 +106,7 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
     }
 
     const newBatchId = formData.get('newBatchId') as string;
+    const expirationDate = formData.get('expirationDate') as string;
 
     onTransaction({
       type: txnType,
@@ -88,7 +114,8 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
       quantityChange,
       handler,
       documentNumber,
-      ...(txnType === '入庫' && newBatchId ? { newBatchId } : {})
+      ...(txnType === '入庫' && newBatchId ? { newBatchId } : {}),
+      ...(txnType === '入庫' && expirationDate ? { expirationDate } : {})
     } as any);
 
     setIsTxnModalOpen(false);
@@ -102,13 +129,22 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">庫存總表</h2>
           <p className="text-slate-500 mt-2">管理所有零件、產品與耗材的庫存狀態與儲位。</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <Plus className="w-5 h-5" />
-          新增品項
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleRemoveExpired}
+            className="bg-red-50 hover:bg-red-100 text-red-600 px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors border border-red-200 shadow-sm"
+          >
+            <ShieldAlert className="w-5 h-5" />
+            清除過期庫存
+          </button>
+          <button 
+            onClick={() => handleOpenModal()}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <Plus className="w-5 h-5" />
+            新增品項
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -140,18 +176,27 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredInventory.map((item) => (
+              {filteredInventory.map((item) => {
+                const hasExpired = item.batches?.some(b => b.expirationDate && isBefore(new Date(b.expirationDate), new Date()) && b.quantity > 0);
+                
+                return (
                 <React.Fragment key={item.id}>
                   <tr className={`hover:bg-slate-50/50 transition-colors ${expandedRow === item.id ? 'bg-slate-50/50' : ''}`}>
                     <td className="p-4">
                       <button 
                         onClick={() => setExpandedRow(expandedRow === item.id ? null : item.id)}
-                        className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors"
+                        className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors relative"
                       >
                         {expandedRow === item.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        {hasExpired && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
                       </button>
                     </td>
-                    <td className="p-4 font-mono text-sm text-slate-700">{item.id}</td>
+                    <td className="p-4 font-mono text-sm text-slate-700">
+                      <div className="flex items-center gap-2">
+                        {item.id}
+                        {hasExpired && <AlertTriangle className="w-4 h-4 text-red-500" title="包含過期批號" />}
+                      </div>
+                    </td>
                   <td className="p-4 font-medium text-slate-900">{item.name}</td>
                   <td className="p-4">
                     <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
@@ -221,19 +266,35 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
                                   <tr>
                                     <th className="px-4 py-2 font-medium">批號 (Batch ID)</th>
                                     <th className="px-4 py-2 font-medium">入庫時間</th>
+                                    <th className="px-4 py-2 font-medium">有效期限</th>
                                     <th className="px-4 py-2 font-medium text-right">數量</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
                                   {[...item.batches]
-                                    .sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime())
-                                    .map(batch => (
-                                    <tr key={batch.id}>
-                                      <td className="px-4 py-2 font-mono text-slate-700">{batch.id}</td>
-                                      <td className="px-4 py-2 text-slate-500">{format(new Date(batch.receivedDate), 'yyyy/MM/dd HH:mm')}</td>
-                                      <td className="px-4 py-2 text-right font-medium text-slate-900">{batch.quantity} {item.unit}</td>
-                                    </tr>
-                                  ))}
+                                    .sort((a, b) => {
+                                      if (a.expirationDate && b.expirationDate) return new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime();
+                                      if (a.expirationDate) return -1;
+                                      if (b.expirationDate) return 1;
+                                      return new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime();
+                                    })
+                                    .map(batch => {
+                                      const isExpired = batch.expirationDate && isBefore(new Date(batch.expirationDate), new Date()) && batch.quantity > 0;
+                                      return (
+                                      <tr key={batch.id} className={isExpired ? 'bg-red-50/50' : ''}>
+                                        <td className="px-4 py-2 font-mono text-slate-700">
+                                          <div className="flex items-center gap-2">
+                                            {batch.id}
+                                            {isExpired && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-600 border border-red-200">已過期</span>}
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-2 text-slate-500">{format(new Date(batch.receivedDate), 'yyyy/MM/dd HH:mm')}</td>
+                                        <td className={`px-4 py-2 ${isExpired ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
+                                          {batch.expirationDate ? format(new Date(batch.expirationDate), 'yyyy/MM/dd') : '-'}
+                                        </td>
+                                        <td className={`px-4 py-2 text-right font-medium ${isExpired ? 'text-red-700' : 'text-slate-900'}`}>{batch.quantity} {item.unit}</td>
+                                      </tr>
+                                    )})}
                                 </tbody>
                               </table>
                             </div>
@@ -245,7 +306,8 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
                     </tr>
                   )}
                 </React.Fragment>
-              ))}
+                );
+              })}
               {filteredInventory.length === 0 && (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-slate-500">
@@ -348,9 +410,15 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
               </div>
 
               {txnType === '入庫' && (
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-slate-700">批號 (Batch ID) <span className="text-slate-400 font-normal text-xs ml-1">選填，留空將自動產生</span></label>
-                  <input name="newBatchId" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm" placeholder="例如: B-20240317-01" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">批號 (Batch ID) <span className="text-slate-400 font-normal text-xs ml-1">選填，留空將自動產生</span></label>
+                    <input name="newBatchId" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm" placeholder="例如: B-20240317-01" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-slate-700">有效期限 <span className="text-slate-400 font-normal text-xs ml-1">選填</span></label>
+                    <input type="date" name="expirationDate" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm" />
+                  </div>
                 </div>
               )}
 
