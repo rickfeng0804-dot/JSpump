@@ -102,7 +102,7 @@ export function Transactions({ transactions, inventory, onAddTransaction }: Tran
                 <th className="p-4">零件/產品編號</th>
                 <th className="p-4 text-right">數量</th>
                 <th className="p-4">經手人/單位</th>
-                <th className="p-4">單據號碼</th>
+                <th className="p-4">單據號碼 / 批號明細</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -135,7 +135,18 @@ export function Transactions({ transactions, inventory, onAddTransaction }: Tran
                       <span className="text-slate-500 text-sm ml-1">{item?.unit || ''}</span>
                     </td>
                     <td className="p-4 text-slate-700">{txn.handler}</td>
-                    <td className="p-4 font-mono text-sm text-slate-500">{txn.documentNumber}</td>
+                    <td className="p-4">
+                      <div className="font-mono text-sm text-slate-500">{txn.documentNumber}</div>
+                      {txn.batchDetails && txn.batchDetails.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {txn.batchDetails.map((b, idx) => (
+                            <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                              {b.batchId} ({b.quantity})
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

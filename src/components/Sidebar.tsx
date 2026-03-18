@@ -14,6 +14,7 @@ export function Sidebar({ activeTab, setActiveTab, onLogout }: SidebarProps) {
     { id: 'inventory', label: '庫存總表', icon: Package },
     { id: 'transactions', label: '出入庫紀錄', icon: ArrowLeftRight },
     { id: 'locations', label: '儲位管理', icon: Map },
+    { id: 'settings', label: '系統設定', icon: Settings },
   ];
 
   return (

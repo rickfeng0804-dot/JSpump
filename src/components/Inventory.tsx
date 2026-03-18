@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { InventoryItem, Transaction, TransactionType } from '../types';
-import { Search, Plus, Edit2, Trash2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, ArrowDownToLine, ArrowUpFromLine, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface InventoryProps {
   inventory: InventoryItem[];
@@ -19,6 +20,8 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
   const [isTxnModalOpen, setIsTxnModalOpen] = useState(false);
   const [txnType, setTxnType] = useState<'入庫' | '出庫'>('入庫');
   const [txnItem, setTxnItem] = useState<InventoryItem | null>(null);
+
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const filteredInventory = inventory.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -77,13 +80,16 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
       quantityChange = -quantityChange;
     }
 
+    const newBatchId = formData.get('newBatchId') as string;
+
     onTransaction({
       type: txnType,
       itemId: txnItem.id,
       quantityChange,
       handler,
       documentNumber,
-    });
+      ...(txnType === '入庫' && newBatchId ? { newBatchId } : {})
+    } as any);
 
     setIsTxnModalOpen(false);
     setTxnItem(null);
@@ -123,6 +129,7 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-sm font-medium">
+                <th className="p-4 w-10"></th>
                 <th className="p-4">零件/產品編號</th>
                 <th className="p-4">品名規格</th>
                 <th className="p-4">類別</th>
@@ -134,8 +141,17 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredInventory.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="p-4 font-mono text-sm text-slate-700">{item.id}</td>
+                <React.Fragment key={item.id}>
+                  <tr className={`hover:bg-slate-50/50 transition-colors ${expandedRow === item.id ? 'bg-slate-50/50' : ''}`}>
+                    <td className="p-4">
+                      <button 
+                        onClick={() => setExpandedRow(expandedRow === item.id ? null : item.id)}
+                        className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded transition-colors"
+                      >
+                        {expandedRow === item.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </button>
+                    </td>
+                    <td className="p-4 font-mono text-sm text-slate-700">{item.id}</td>
                   <td className="p-4 font-medium text-slate-900">{item.name}</td>
                   <td className="p-4">
                     <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
@@ -189,11 +205,50 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
                       </button>
                     </div>
                   </td>
-                </tr>
+                  </tr>
+                  {expandedRow === item.id && (
+                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                      <td colSpan={8} className="p-0">
+                        <div className="px-14 py-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Layers className="w-4 h-4 text-slate-400" />
+                            <h4 className="text-sm font-medium text-slate-700">批號庫存明細 (FIFO)</h4>
+                          </div>
+                          {item.batches && item.batches.length > 0 ? (
+                            <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                              <table className="w-full text-left text-sm">
+                                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500">
+                                  <tr>
+                                    <th className="px-4 py-2 font-medium">批號 (Batch ID)</th>
+                                    <th className="px-4 py-2 font-medium">入庫時間</th>
+                                    <th className="px-4 py-2 font-medium text-right">數量</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {[...item.batches]
+                                    .sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime())
+                                    .map(batch => (
+                                    <tr key={batch.id}>
+                                      <td className="px-4 py-2 font-mono text-slate-700">{batch.id}</td>
+                                      <td className="px-4 py-2 text-slate-500">{format(new Date(batch.receivedDate), 'yyyy/MM/dd HH:mm')}</td>
+                                      <td className="px-4 py-2 text-right font-medium text-slate-900">{batch.quantity} {item.unit}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500 italic">目前無批號資料</p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
               {filteredInventory.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
                     找不到符合條件的品項
                   </td>
                 </tr>
@@ -288,9 +343,16 @@ export function Inventory({ inventory, onAdd, onUpdate, onDelete, onTransaction 
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">{txnItem.unit}</span>
                 </div>
                 {txnType === '出庫' && (
-                  <p className="text-xs text-slate-500 mt-1">出庫數量不可超過目前庫存 ({txnItem.quantity})</p>
+                  <p className="text-xs text-slate-500 mt-1">出庫數量不可超過目前庫存 ({txnItem.quantity})。系統將自動依 FIFO (先進先出) 扣除最舊批號。</p>
                 )}
               </div>
+
+              {txnType === '入庫' && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">批號 (Batch ID) <span className="text-slate-400 font-normal text-xs ml-1">選填，留空將自動產生</span></label>
+                  <input name="newBatchId" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm" placeholder="例如: B-20240317-01" />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">

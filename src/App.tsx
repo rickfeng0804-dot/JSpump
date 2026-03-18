@@ -9,9 +9,11 @@ import { Dashboard } from './components/Dashboard';
 import { Inventory } from './components/Inventory';
 import { Transactions } from './components/Transactions';
 import { LocationManagement } from './components/LocationManagement';
+import { Settings } from './components/Settings';
 import { Login } from './components/Login';
 import { initialInventory, initialTransactions } from './data/mockData';
-import { InventoryItem, Transaction } from './types';
+import { InventoryItem, Transaction, TransactionBatchDetail } from './types';
+import { format } from 'date-fns';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -48,25 +50,60 @@ export default function App() {
     setTransactions(prev => [newTransaction, ...prev]);
   };
 
-  const handleAddTransaction = (txnData: Omit<Transaction, 'id' | 'timestamp'>) => {
-    const newTransaction: Transaction = {
-      ...txnData,
-      id: `TXN-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-    };
+  const handleAddTransaction = (txnData: Omit<Transaction, 'id' | 'timestamp'> & { newBatchId?: string }) => {
+    let batchDetails: TransactionBatchDetail[] = [];
+    const timestamp = new Date().toISOString();
 
-    setTransactions(prev => [newTransaction, ...prev]);
-
-    // Update inventory quantity
     setInventory(prev => prev.map(item => {
       if (item.id === txnData.itemId) {
+        let updatedBatches = [...(item.batches || [])];
+        let remainingQty = Math.abs(txnData.quantityChange);
+        const isOutbound = txnData.quantityChange < 0;
+
+        if (isOutbound) {
+          // FIFO: Sort by receivedDate asc
+          updatedBatches.sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime());
+          
+          for (let i = 0; i < updatedBatches.length && remainingQty > 0; i++) {
+            const batch = updatedBatches[i];
+            if (batch.quantity > 0) {
+              const deduct = Math.min(batch.quantity, remainingQty);
+              batch.quantity -= deduct;
+              remainingQty -= deduct;
+              batchDetails.push({ batchId: batch.id, quantity: deduct });
+            }
+          }
+          // Filter out empty batches
+          updatedBatches = updatedBatches.filter(b => b.quantity > 0);
+        } else if (txnData.quantityChange > 0) {
+          // Inbound
+          const newBatchId = txnData.newBatchId || `B-${format(new Date(), 'yyyyMMddHHmm')}`;
+          updatedBatches.push({
+            id: newBatchId,
+            itemId: item.id,
+            quantity: remainingQty,
+            receivedDate: timestamp
+          });
+          batchDetails.push({ batchId: newBatchId, quantity: remainingQty });
+        }
+
         return {
           ...item,
-          quantity: item.quantity + txnData.quantityChange
+          quantity: item.quantity + txnData.quantityChange,
+          batches: updatedBatches
         };
       }
       return item;
     }));
+
+    const newTransaction: Transaction = {
+      ...txnData,
+      id: `TXN-${Date.now()}`,
+      timestamp,
+      batchDetails: batchDetails.length > 0 ? batchDetails : undefined
+    };
+
+    setTransactions(prev => [newTransaction, ...prev]);
   };
 
   if (!isAuthenticated) {
@@ -105,6 +142,12 @@ export default function App() {
           <LocationManagement
             inventory={inventory}
             onMoveItem={handleMoveItem}
+          />
+        )}
+        {activeTab === 'settings' && (
+          <Settings 
+            inventory={inventory}
+            transactions={transactions}
           />
         )}
       </main>
