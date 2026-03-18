@@ -1,0 +1,215 @@
+import React, { useState } from 'react';
+import { InventoryItem } from '../types';
+import { Search, Plus, Edit2, Trash2 } from 'lucide-react';
+
+interface InventoryProps {
+  inventory: InventoryItem[];
+  onAdd: (item: InventoryItem) => void;
+  onUpdate: (item: InventoryItem) => void;
+  onDelete: (id: string) => void;
+}
+
+export function Inventory({ inventory, onAdd, onUpdate, onDelete }: InventoryProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+
+  const filteredInventory = inventory.filter(item => 
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.location.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleOpenModal = (item?: InventoryItem) => {
+    setEditingItem(item || null);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setEditingItem(null);
+    setIsModalOpen(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const newItem: InventoryItem = {
+      id: formData.get('id') as string,
+      name: formData.get('name') as string,
+      category: formData.get('category') as string,
+      quantity: Number(formData.get('quantity')),
+      safetyStock: Number(formData.get('safetyStock')),
+      location: formData.get('location') as string,
+      unit: formData.get('unit') as string,
+    };
+
+    if (editingItem) {
+      onUpdate(newItem);
+    } else {
+      onAdd(newItem);
+    }
+    handleCloseModal();
+  };
+
+  return (
+    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">庫存總表</h2>
+          <p className="text-slate-500 mt-2">管理所有零件、產品與耗材的庫存狀態與儲位。</p>
+        </div>
+        <button 
+          onClick={() => handleOpenModal()}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
+        >
+          <Plus className="w-5 h-5" />
+          新增品項
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center gap-4 bg-slate-50/50">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text"
+              placeholder="搜尋編號、品名或儲位..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-sm font-medium">
+                <th className="p-4">零件/產品編號</th>
+                <th className="p-4">品名規格</th>
+                <th className="p-4">類別</th>
+                <th className="p-4 text-right">當前庫存量</th>
+                <th className="p-4 text-right">安全庫存位</th>
+                <th className="p-4">存放儲位</th>
+                <th className="p-4 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredInventory.map((item) => (
+                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="p-4 font-mono text-sm text-slate-700">{item.id}</td>
+                  <td className="p-4 font-medium text-slate-900">{item.name}</td>
+                  <td className="p-4">
+                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                      {item.category}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right">
+                    <span className={`font-bold text-lg ${item.quantity <= item.safetyStock ? 'text-red-600' : 'text-slate-900'}`}>
+                      {item.quantity}
+                    </span>
+                    <span className="text-slate-500 text-sm ml-1">{item.unit}</span>
+                  </td>
+                  <td className="p-4 text-right text-slate-500">{item.safetyStock}</td>
+                  <td className="p-4 text-slate-600 font-mono text-sm">{item.location}</td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <button 
+                        onClick={() => handleOpenModal(item)}
+                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="編輯"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('確定要刪除此品項嗎？')) {
+                            onDelete(item.id);
+                          }
+                        }}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="刪除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredInventory.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                    找不到符合條件的品項
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+              <h3 className="text-xl font-bold text-slate-900">
+                {editingItem ? '編輯品項' : '新增品項'}
+              </h3>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">零件/產品編號</label>
+                  <input required name="id" defaultValue={editingItem?.id} readOnly={!!editingItem} className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent read-only:bg-slate-50 read-only:text-slate-500" placeholder="例如: PX-100" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">類別</label>
+                  <select required name="category" defaultValue={editingItem?.category || '成品'} className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                    <option value="成品">成品</option>
+                    <option value="半成品">半成品</option>
+                    <option value="零件">零件</option>
+                    <option value="耗材">耗材</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">品名規格</label>
+                <input required name="name" defaultValue={editingItem?.name} className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="例如: 沉水泵浦 1HP" />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">當前庫存量</label>
+                  <input required type="number" name="quantity" defaultValue={editingItem?.quantity || 0} min="0" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">安全庫存位</label>
+                  <input required type="number" name="safetyStock" defaultValue={editingItem?.safetyStock || 10} min="0" className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700">單位</label>
+                  <input required name="unit" defaultValue={editingItem?.unit || '個'} className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">存放儲位</label>
+                <input required name="location" defaultValue={editingItem?.location} className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="例如: A-05-02" />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button type="button" onClick={handleCloseModal} className="px-5 py-2.5 rounded-xl font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                  取消
+                </button>
+                <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm">
+                  儲存
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
